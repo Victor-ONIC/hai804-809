@@ -1,7 +1,7 @@
 from PIL import Image
 from Histogramme import Histogramme
 
-couleurs = ["rouge", "orange", "jaune", 3, "vert", 5, "cyan", 7, "bleu", "violet", "magenta", 11]
+couleurs = ["rouge  ", "orange ", "jaune  ", "3      ", "vert   ", "5      ", "cyan   ", "7      ", "bleu   ", "violet ", "magenta", "11     "]
 
 nameImIn = "perso.ppm"
 imIn = Image.open(nameImIn)
