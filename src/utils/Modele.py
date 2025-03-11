@@ -68,6 +68,12 @@ class Modele :
     def degRotate(self, alpha) :
         for i in range(len(self.C)) :
             self.C[i] = Modele.congru(self.C[i]+alpha/360)
+    
+    def bord(self, n=-1) :      # bord(n) retourne la liste des deux bords de la nième section
+        if n == -1 :            # bord() retourne la liste de toutes les listes des deux bords de chaque section
+            return [[Modele.congru(self.C[i] + self.w[i]/2), Modele.congru(self.C[i] - self.w[i]/2)] for i in range(len(self.C))]
+        elif n < len(self.C) :
+            return [Modele.congru(self.C[n] + self.w[n]/2), Modele.congru(self.C[n] - self.w[n]/2)]
             
 
     def congru(n) :             # Permet de faire la congruence
