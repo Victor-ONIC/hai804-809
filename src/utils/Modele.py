@@ -84,8 +84,3 @@ class Modele :
     def distance_congru(a, b) :     # Retourne la distance congru entre deux angles
         d = abs(a-b)                # ex : entre 0 et 0.9, la distance et 0.1 car 0 est congru à 1
         return min(d, 1-d)          # il trouve la distance la plus courte entre les deux sens de rotation possible
-
-
-
-
-#Modele([[0, 0.2, 0.4, 0.6, 0.8], [0.1, 0.1, 0.1]])
