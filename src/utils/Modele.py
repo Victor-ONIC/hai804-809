@@ -74,6 +74,13 @@ class Modele :
             return [[Modele.congru(self.C[i] + self.w[i]/2), Modele.congru(self.C[i] - self.w[i]/2)] for i in range(len(self.C))]
         elif n < len(self.C) :
             return [Modele.congru(self.C[n] + self.w[n]/2), Modele.congru(self.C[n] - self.w[n]/2)]
+    
+    def distance_secteur(self, h, c) :    # h est la valeur de la couleur, c est l'indice dans la liste des secteurs
+        if Modele.distance_congru(h, self.C[c]) < self.w[c]/2 :
+            return -1               # cas où h est strictement dans le secteur
+        else :
+            b = self.bord(c)        # cas où on est hors du secteur (renvoie 0 si on est sur un bord)
+            return min(Modele.distance_congru(h, b[0]), Modele.distance_congru(h, b[1]))
             
 
     def congru(n) :             # Permet de faire la congruence

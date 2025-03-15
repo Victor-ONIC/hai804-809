@@ -69,17 +69,18 @@ def best_template(image):
 
 
 #Input image (obv) and both template and alpha 
-def harmonize(image, template , alpha):
+def harmonize(image, template, alpha, nbValue):
     #TODO
 
     #1. Rotate template by alpha
 
-    template = rotate_template(template, alpha)
+    template.rotate(alpha)
 
     #2. Get the histogram of the image
 
     #idk if this works yet ill check wit clement
-    histogram = Histogramme(image)
+    histogram = Histogramme(nbValue)
+    histogram.load(image)
 
     #3. Compare the histogram with the rotated template
 
@@ -87,7 +88,7 @@ def harmonize(image, template , alpha):
 
     #4. Assign the closest edge to each pixel
     E = []
-
+    
     for i in range(image.size[0]) :
         for j in range(image.size[1]):
             hue = get_hue(image.getpixel((i, j)))
