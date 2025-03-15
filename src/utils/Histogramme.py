@@ -1,10 +1,16 @@
 from colorsys import rgb_to_hsv as r2h
 
 class Histogramme :
+    """
+    Créez un histogramme vide avec le constructeur et une "nbValue".
+    Ensuite, chargez une image avec load().
+    Les données de l'histogramme, arrondies sur les valeurs permises, sont stokées dans "data".
+    """
     def __init__(self, nbValue) :
-        self.nbValue = nbValue
-        self.data = [0 for i in range(nbValue)]
-        self.trueData = []
+        self.nbValue = nbValue                      # "nbValue" correspond aux nombre de valeurs différentes que peut prendre les pixels de l'image qui sera donnée à l'histogramme,
+                                                    # les autres valeurs seront arrondies à la plus proche.
+        self.data = [0 for i in range(nbValue)]     # "data" stocke à la position "n", le nombre de pixels ayant sa valeur arrondie à "n/nbValue", les valeurs étant supposées aller de 0 à 1.
+        self.trueData = []                          # "trueData" stock les vraies valeurs des pixels, pour recalculer les bon arrondies si l'on veut changer de "nbValue".
         
     def load(self, image) :
         nbx = image.size[0]
