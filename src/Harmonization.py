@@ -3,7 +3,8 @@
 
 import math
 from PIL import Image
-from Histogramme import Histogramme
+from utils.Histogramme import Histogramme
+from utils.Modele import Modele
 from colorsys import rgb_to_hsv as r2h
 
 #J'ai pas fait une classe puisque ca m'avait pas l'air nécessaire
