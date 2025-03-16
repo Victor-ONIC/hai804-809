@@ -5,6 +5,7 @@ import math
 from PIL import Image
 from utils.Histogramme import Histogramme
 from colorsys import rgb_to_hsv as r2h
+from colorsys import hsv_to_rgb as h2r
 from utils.Modele import Modele
 
 def to_degrees(alpha):
@@ -93,24 +94,51 @@ def harmony_by_template(image, model: Modele):
             r, g, b = image.getpixel((i, j))
             hue , saturation , _ = r2h(r / 255.0, g / 255.0, b / 255.0)
             closest_edge_index = assign_closest_edge_index(hue, model)
+            #print("closest_edge_index : ", closest_edge_index)
             E = model.bord(closest_edge_index)
-            sum_harmony_value += abs(hue - E[0]) * saturation  # Use closest edge
+            #print("E : ", E)
+            selected_edge = E[0] if abs(hue - E[0]) < abs(hue - E[1]) else E[1]
+            sum_harmony_value += abs(hue - selected_edge) * saturation  # Use closest edge
 
     return sum_harmony_value
 
 #M(X , Tm) = (m , alpha0) avec alpha0 = argmin alpha F(X , (m,alpha)) in the paper
 def best_angle_radians(image, template):
-    pass
+    best_alpha = 0
+    best_harmony_value = -float('inf')
+    
+    original_C = template.C[:] 
+    
+    for alpha in [to_radians(a) for a in range(0, 360, 10)]:
+        template.radRotate(alpha) 
+        harmony_value = harmony_by_template(image, template)
+        
+        if harmony_value > best_harmony_value:
+            best_harmony_value = harmony_value
+            best_alpha = alpha
+    
+        template.C = original_C[:]  # Restore original template
 
+    return best_alpha
 #B(X) = (m0 , alpha0) avec m0 = argmin m M(X , Tm) in the paper
 def best_template(image):
-    pass
+    best_harmony_value = 0.0
+    best_template = None
+    best_alpha = None
+    for template in Modele.get_liste_modeles():
+        template = Modele(template)
+        alpha = best_angle_radians(image, template)
+        harmony_value = harmony_by_template(image, template)
+        if harmony_value > best_harmony_value:
+            best_harmony_value = harmony_value
+            best_template = template
+            best_alpha = alpha
+
+    return best_template, best_alpha
 
 #d = H - C (idk what c is yet but tkt)
 #w = the width of a zone
 
-def gaussian(x):
-    return math.exp(-x**2)
 
 #H'(X) = C(p) + (w/2) * (1 - Gaussian_w/2(||H(p)-C(p))) in the paper
 def harmonize(image, imageOut, template: Modele, alpha):
@@ -128,12 +156,15 @@ def harmonize(image, imageOut, template: Modele, alpha):
             closest_edge_index = assign_closest_edge_index(h, template)
             central_hue = template.C[closest_edge_index]
             width = template.w[closest_edge_index]
+            if template.bord(closest_edge_index) == -1:
+                print("We in the zone")
+                new_h = central_hue
+            else:
+                d = Modele.distance_congru(h, central_hue)
+                new_h = central_hue + (width / 2) * (1 - math.exp(- (d ** 2) / (width ** 2 / 2)))
+                new_h = Modele.congru(new_h)
 
-            d = Modele.distance_congru(h, central_hue)
-            new_h = central_hue + (width / 2) * (1 - math.exp(- (d ** 2) / (width ** 2 / 2)))
-            new_h = Modele.congru(new_h)
-
-            new_r, new_g, new_b = [int(c * 255) for c in r2h(new_h, s, v)]
+            new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)]
             pixels_out[i, j] = (new_r, new_g, new_b)
 
     return imageOut
@@ -164,24 +195,47 @@ def harmonize_opti(image , imageOut , template : Modele , alpha):
             new_h = Modele.congru(new_h)  # Ensure hue stays in [0,1]
 
             # Convert back to RGB
-            new_r, new_g, new_b = [int(c * 255) for c in r2h(new_h, s, v)]
+            new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)]
             pixels_out[i, j] = (new_r, new_g, new_b)
 
     return imageOut
+
+#TODO : when it works, implement the optimized edge detection
+def harmonize_auto_angle(image , imageOut , template : Modele):
+    alpha = best_angle_radians(image, template)
+    print("Best angle : ", to_degrees(alpha))
+    return harmonize(image, imageOut, template, alpha)
+
+def harmonize_auto(image , imageOut):
+    template , alpha = best_template(image)
+    print("Best template : ", template)
+    print("Best angle : ", to_degrees(alpha))
+    return harmonize(image, imageOut, template, alpha)
+
 #--------------------------------------------------tests-----------------------------------------------------------
-nameImage = "./src/images/perso.ppm"
+nameImage = "./src/images/colorful.ppm"
 im = Image.open(nameImage)
 imOut = Image.new(im.mode, im.size)
 
-harmonize(im, imOut , Modele("I"), 0)
 
-imOut.save("./src/images/harmonized.ppm")
-imOut.close()
 
+template = Modele("I")
+print("Harmonization with manual angle and template")
+harmonize(im, imOut, template, to_radians(45))
+imOut.save("./src/images/harmonized_manual_angle.ppm")
+
+print("Harmonization opti")
 imOut2 = Image.new(im.mode, im.size)
-
-harmonize_opti(im, imOut2 , Modele("I"), 0)
-
+harmonize_opti(im, imOut2, template, to_radians(45))
 imOut2.save("./src/images/harmonized_opti.ppm")
-imOut2.close()
-im.close()
+
+
+print("Harmonization with auto angle and template")
+harmonize_auto_angle(im, imOut, template)
+imOut.save("./src/images/harmonized_auto_angle.ppm")
+
+print("Harmonization with auto template")
+
+# imOut2 = Image.new(im.mode, im.size)
+# harmonize_auto(im, imOut2)
+# imOut2.save("./src/images/harmonized_auto.ppm")
