@@ -76,8 +76,8 @@ class Modele :
             return [Modele.congru(self.C[n] + self.w[n]/2), Modele.congru(self.C[n] - self.w[n]/2)]
     
     def distance_secteur(self, h, c) :    # h est la valeur de la couleur, c est l'indice dans la liste des secteurs
-        if Modele.distance_congru(h, self.C[c]) < self.w[c]/2 :
-            return -1               # cas où h est strictement dans le secteur
+        if Modele.distance_congru(h, self.C[c]) <= self.w[c]/2 :
+            return -1               
         else :
             b = self.bord(c)        # cas où on est hors du secteur (renvoie 0 si on est sur un bord)
             return min(Modele.distance_congru(h, b[0]), Modele.distance_congru(h, b[1]))
@@ -99,4 +99,4 @@ class Modele :
         return min(d, 1-d)          # il trouve la distance la plus courte entre les deux sens de rotation possible
     
     def get_liste_modeles():
-        return ["i", "V", "L", "I", "T", "Y", "X", "N"]
+        return ["i", "V", "L", "I", "T", "Y", "X"] # J'ai enlevé "N" puisque c'est un modèle vide

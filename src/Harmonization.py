@@ -30,40 +30,41 @@ def assign_closest_edge_index(hue, model: Modele):
     return closest_edge_index
 
 #FIXME : just does not really work
-def assign_closest_edge_index_optimized(hue, model: Modele, image , i , j):
-    pixels = get_neighboring_pixels(image, i, j)
-    omega = get_omega(pixels, image)
+def assign_closest_edge_index_optimized(h , model: Modele, image, i, j):
+    pixels = get_neighboring_pixels(image, i, j)  # Get neighbors once
+    omega = get_omega(pixels, image)  
 
     min_energy = float('inf')
     closest_edge_index = None
+    epsilon = 1e-5  # To prevent division by zero
 
-    for i in range(len(model.C)):  # Iterate over the number of template edges
-        central_hue = model.C[i]
-        w = model.w[i]
+    for idx in range(len(model.C)):  
+        central_hue = model.C[idx]
 
-        E1 = sum(abs(h - central_hue) * w for h in omega)
+        # ---- Compute E1: Deviation from Central Hue ----
+        E1 = sum(abs(h - central_hue) * s for h, s in omega)  # Saturation-weighted difference
 
+        # ---- Compute E2: Local Contrast Preservation ----
         E2 = 0
-        for p in range(len(pixels)):
-            for q in range(len(pixels)):
-                if p != q:
-                    _, s_p, _ = r2h(*[c / 255.0 for c in image.getpixel((pixels[p][0], pixels[p][1]))])
-                    _, s_q, _ = r2h(*[c / 255.0 for c in image.getpixel((pixels[q][0], pixels[q][1]))])
+        for p in range(len(omega)):
+            for q in range(p + 1, len(omega)):  # Avoid duplicate pairs
+                h_p, s_p = omega[p]
+                h_q, s_q = omega[q]
 
-                    Smax_pq = max(s_p, s_q)
-                    hue_diff = abs(omega[p] - omega[q])
-                    if hue_diff > 0: 
-                        E2 += Smax_pq * (1 / hue_diff)
+                Smax_pq = max(s_p, s_q)
+                hue_diff = abs(h_p - h_q) + epsilon  # Prevent division by zero
+                E2 += Smax_pq * (1 / hue_diff)
 
-        # Total energy
+        # ---- Total Energy ----
         E = E1 + E2
 
-        # Find the minimum energy edge
+        # ---- Select the Best Sector ----
         if E < min_energy:
             min_energy = E
-            closest_edge_index = i
+            closest_edge_index = idx
 
     return closest_edge_index
+
 
 
 
@@ -81,8 +82,7 @@ def get_omega(pixels, image):
     for p in pixels:
         r, g, b = image.getpixel((p[0], p[1]))
         h, _, _ = r2h(r / 255.0, g / 255.0, b / 255.0)
-        omega.append(h)
-    
+        omega.append((h, _))
     return omega
 
 
@@ -125,14 +125,26 @@ def best_template(image):
     best_harmony_value = 0.0
     best_template = None
     best_alpha = None
-    for template in Modele.get_liste_modeles():
-        template = Modele(template)
-        alpha = best_angle_radians(image, template)
-        harmony_value = harmony_by_template(image, template)
-        if harmony_value > best_harmony_value:
-            best_harmony_value = harmony_value
-            best_template = template
-            best_alpha = alpha
+    for template_name in Modele.get_liste_modeles():
+        try:
+            template = Modele(template_name)
+            alpha = best_angle_radians(image, template)
+            harmony_value = harmony_by_template(image, template)
+            
+            # Ensure harmony_value is a valid number
+            if not isinstance(harmony_value, (int, float)) or math.isnan(harmony_value) or math.isinf(harmony_value):
+                raise ValueError(f"Invalid harmony value: {harmony_value}")
+            
+            if harmony_value > best_harmony_value:
+                best_harmony_value = harmony_value
+                best_template = template
+                best_alpha = alpha
+        except Exception as e:
+            print(f"Error processing template {template_name}: {e}")
+            continue
+
+    if best_template is None or best_alpha is None:
+        raise ValueError("No valid template or angle found for the given image.")
 
     return best_template, best_alpha
 
@@ -156,8 +168,7 @@ def harmonize(image, imageOut, template: Modele, alpha):
             closest_edge_index = assign_closest_edge_index(h, template)
             central_hue = template.C[closest_edge_index]
             width = template.w[closest_edge_index]
-            if template.bord(closest_edge_index) == -1:
-                print("We in the zone")
+            if template.distance_secteur(h, closest_edge_index) == -1:
                 new_h = central_hue
             else:
                 d = Modele.distance_congru(h, central_hue)
@@ -171,7 +182,7 @@ def harmonize(image, imageOut, template: Modele, alpha):
 
 #FIXME : optimized edge detection is fraudulent too
 def harmonize_opti(image , imageOut , template : Modele , alpha):
-        # Step 1: Rotate the template
+    # Step 1: Rotate the template
     template.radRotate(alpha)
     
     # Step 2: Convert image to HSV
@@ -188,15 +199,17 @@ def harmonize_opti(image , imageOut , template : Modele , alpha):
             closest_edge_index = assign_closest_edge_index_optimized(h , template , image , i , j)
             central_hue = template.C[closest_edge_index]
             width = template.w[closest_edge_index]
+            if template.distance_secteur(h, closest_edge_index) == -1:
+                new_h = central_hue
+            else:
+                # Apply the formula for color adjustment
+                d = Modele.distance_congru(h, central_hue)
+                new_h = central_hue + (width / 2) * (1 - math.exp(- (d ** 2) / (width ** 2 / 2)))
+                new_h = Modele.congru(new_h)  # Ensure hue stays in [0,1]
 
-            # Apply the formula for color adjustment
-            d = Modele.distance_congru(h, central_hue)
-            new_h = central_hue + (width / 2) * (1 - math.exp(- (d ** 2) / (width ** 2 / 2)))
-            new_h = Modele.congru(new_h)  # Ensure hue stays in [0,1]
-
-            # Convert back to RGB
-            new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)]
-            pixels_out[i, j] = (new_r, new_g, new_b)
+                # Convert back to RGB
+                new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)]
+                pixels_out[i, j] = (new_r, new_g, new_b)
 
     return imageOut
 
@@ -208,7 +221,7 @@ def harmonize_auto_angle(image , imageOut , template : Modele):
 
 def harmonize_auto(image , imageOut):
     template , alpha = best_template(image)
-    print("Best template : ", template)
+    print("Best template : ", template.type)
     print("Best angle : ", to_degrees(alpha))
     return harmonize(image, imageOut, template, alpha)
 
@@ -220,9 +233,11 @@ imOut = Image.new(im.mode, im.size)
 
 
 template = Modele("I")
-print("Harmonization with manual angle and template")
-harmonize(im, imOut, template, to_radians(45))
-imOut.save("./src/images/harmonized_manual_angle.ppm")
+
+
+# print("Harmonization with manual angle and template")
+# harmonize(im, imOut, template, to_radians(45))
+# imOut.save("./src/images/harmonized_manual_angle.ppm")
 
 print("Harmonization opti")
 imOut2 = Image.new(im.mode, im.size)
@@ -230,11 +245,11 @@ harmonize_opti(im, imOut2, template, to_radians(45))
 imOut2.save("./src/images/harmonized_opti.ppm")
 
 
-print("Harmonization with auto angle and template")
-harmonize_auto_angle(im, imOut, template)
-imOut.save("./src/images/harmonized_auto_angle.ppm")
+# print("Harmonization with auto angle and template")
+# harmonize_auto_angle(im, imOut, template)
+# imOut.save("./src/images/harmonized_auto_angle.ppm")
 
-print("Harmonization with auto template")
+# print("Harmonization with auto template")
 
 # imOut2 = Image.new(im.mode, im.size)
 # harmonize_auto(im, imOut2)
