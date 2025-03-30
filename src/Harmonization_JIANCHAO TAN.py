@@ -20,7 +20,7 @@ def harmonization(imIn) :
     #1 calcul de l'enveloppe convexe RGB
     RGB_conv = ss.ConvexHull(data)
     RGB_vertices = data[RGB_conv.vertices]
-    #1.5 réduire le nombre de point de l'enveloppe en fonction d'un nombre arbitraire de couleur
+    #1.5 réduire le nombre de point de l'enveloppe en fonction d'un nombre arbitraire de couleur (en fait c'est le point numéro 2)
     #2 calcul de la palette
     #3 calcul de l'enveloppe convexe RGBXY
     #4 calcul des coordonnées barycentrique RGB et RGBXY
