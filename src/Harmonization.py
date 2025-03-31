@@ -7,6 +7,7 @@ from utils.Histogramme import Histogramme
 from colorsys import rgb_to_hsv as r2h
 from colorsys import hsv_to_rgb as h2r
 from utils.Modele import Modele
+import time
 
 
 ############################################################## Utils ################################################################################""
@@ -64,12 +65,12 @@ def assign_closest_edge(hue, model: Modele):
         return bord[0]
 
  
-def assign_closest_edge_opti(hue, model: Modele , i , j):
+def assign_closest_edge_opti(hue, image , model: Modele , i , j):
     '''
         Returns the closest border based on the closest edge
     '''
 
-    sector_index = assign_closest_sector_index_optimized(hue, model , i , j)
+    sector_index = assign_closest_sector_index_optimized(model , image , i , j)
     if sector_index is None:
         return hue 
     
@@ -83,7 +84,7 @@ def assign_closest_edge_opti(hue, model: Modele , i , j):
         return bord[0]
 
 
-def assign_closest_sector_index_optimized(h , model: Modele, image, i, j):
+def assign_closest_sector_index_optimized(model: Modele, image, i, j):
     '''
         Return the center of the closest edge, using the Energy calculation.
 
@@ -129,7 +130,7 @@ def assign_closest_sector_index_optimized(h , model: Modele, image, i, j):
 
  
         #Multiply by a constant and add E2 if you want to try the real formula
-        E = E1 
+        E = E1
 
         if E < min_energy:  
             min_energy = E
@@ -179,8 +180,8 @@ def harmony_by_template(image, model: Modele):
         for j in range(image.size[1]):
             r, g, b = image.getpixel((i, j))
             hue , saturation , _ = r2h(r / 255.0, g / 255.0, b / 255.0)
-            E = assign_closest_edge(hue , model) #old
-            #E = assign_closest_edge_opti(hue , model , i , j) #new
+            #E = assign_closest_edge(hue , model) #old
+            E = assign_closest_edge_opti(hue , image , model , i , j) #new
             sum_harmony_value += Modele.distance_congru(hue , E) * saturation  # Use closest edge
 
     return sum_harmony_value
@@ -276,13 +277,13 @@ def harmonize(image, imageOut, template: Modele, alpha):
             h, s, v = r2h(r / 255.0, g / 255.0, b / 255.0)
             closest_sector_index = assign_closest_sector_index(h, template)
             central_hue = template.C[closest_sector_index]
-            width = template.w[closest_sector_index]
+            sector_width = template.w[closest_sector_index]
 
             #If already in the template, keep it
             if template.distance_secteur(h, closest_sector_index) == -1:
                 new_h = h
             else:
-                new_h = project_hue(central_hue , width/2 , h)
+                new_h = project_hue(central_hue , sector_width/2 , h)
 
             new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)] #Convert back to RGB
             pixels_out[i, j] = (new_r, new_g, new_b)
@@ -310,18 +311,19 @@ def harmonize_opti(image , imageOut , template : Modele , alpha):
         for j in range(height):
             r, g, b = pixels[i, j]
             h, s, v = r2h(r / 255.0, g / 255.0, b / 255.0)
-            closest_edge_index = assign_closest_sector_index_optimized(h , template , image , i , j)
+            closest_edge_index = assign_closest_sector_index_optimized(template , image , i , j)
             central_hue = template.C[closest_edge_index]
-            width = template.w[closest_edge_index]
+            sector_width = template.w[closest_edge_index]
 
             #If already in the template, keep it
             if template.distance_secteur(h, closest_edge_index) == -1:
                 new_h = h
                 
             else:
-                new_h = project_hue(central_hue , width/2 , h)
-                new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)] #Convert back to RGB
-                pixels_out[i, j] = (new_r, new_g, new_b)
+                new_h = project_hue(central_hue , sector_width/2 , h)
+            
+            new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)] #Convert back to RGB
+            pixels_out[i, j] = (new_r, new_g, new_b)
 
     return imageOut
 
@@ -336,7 +338,7 @@ def harmonize_auto_angle(image , imageOut , template : Modele):
 
     print("Best angle : ", to_degrees(alpha))
 
-    return harmonize(image, imageOut, template, alpha)
+    return harmonize_opti(image, imageOut, template, alpha)
 
 
 def harmonize_auto(image , imageOut):
@@ -361,6 +363,24 @@ imOut = Image.new(im.mode, im.size)
 template = Modele("I")
 
 print("Harmonization opti")
+# Measure time for harmonize_opti
+start_time = time.time()
 imOut2 = Image.new(im.mode, im.size)
 harmonize_opti(im, imOut2, template, to_radians(45))
 imOut2.save("./src/images/30on30HSV.jpg")
+print("Time for harmonize_opti:", time.time() - start_time, "seconds")
+
+# Measure time for harmonize_auto_angle
+start_time = time.time()
+imOut4 = Image.new(im.mode, im.size)
+harmonize_auto_angle(im, imOut4, template)
+imOut4.save("./src/images/30on30AutoAngle.jpg")
+print("Time for harmonize_auto_angle:", time.time() - start_time, "seconds")
+
+# Measure time for harmonize_auto
+start_time = time.time()
+imOut3 = Image.new(im.mode, im.size)
+harmonize_auto(im, imOut3)
+imOut3.save("./src/images/30on30Auto.jpg")
+print("Time for harmonize_auto:", time.time() - start_time, "seconds")
+
