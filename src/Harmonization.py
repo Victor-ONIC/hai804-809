@@ -12,15 +12,25 @@ from utils.Modele import Modele
 ############################################################## Utils ################################################################################""
 
 def to_degrees(alpha):
+    '''
+        Radians to degrees
+    '''
     return alpha * 180 / math.pi
 
 
 def to_radians(alpha):
+    '''
+        Degrees to radians
+    '''
     return alpha * math.pi / 180
 
 ############################################################## Closest border n dem ###################################################################
 
 def assign_closest_sector_index(hue, model: Modele):
+    ''' 
+        Return the center of the closest edge, us just calculating distance.
+    '''
+    
     min_distance = float('inf')
     closest_edge_index = None
     
@@ -36,12 +46,18 @@ def assign_closest_sector_index(hue, model: Modele):
 
 
 def assign_closest_edge(hue, model: Modele):
+    '''
+        Returns the closest border based on the closest edge
+    '''
+
     sector_index = assign_closest_sector_index(hue, model)
+    if sector_index is None:
+        return hue 
+
     bord = model.bord(sector_index)
-    closest_edge = -float("inf")
+
     dist1 = Modele.distance_congru(hue , bord[0])
     dist2 = Modele.distance_congru(hue , bord[1])
-
     if(dist1 < dist2):
         return bord[1]
     else : 
@@ -49,15 +65,18 @@ def assign_closest_edge(hue, model: Modele):
 
  
 def assign_closest_edge_opti(hue, model: Modele , i , j):
+    '''
+        Returns the closest border based on the closest edge
+    '''
+
     sector_index = assign_closest_sector_index_optimized(hue, model , i , j)
     if sector_index is None:
-        print("this might be the problem")
         return hue 
+    
     bord = model.bord(sector_index)
-    closest_edge = -float("inf")
+
     dist1 = Modele.distance_congru(hue , bord[0])
     dist2 = Modele.distance_congru(hue , bord[1])
-
     if(dist1 < dist2):
         return bord[1]
     else : 
@@ -65,6 +84,14 @@ def assign_closest_edge_opti(hue, model: Modele , i , j):
 
 
 def assign_closest_sector_index_optimized(h , model: Modele, image, i, j):
+    '''
+        Return the center of the closest edge, using the Energy calculation.
+
+        After tests i realized that E2 is a fraud so i clocked it (E2 ended up yielding the same results as before optimization but with
+        much longer computing times)
+    '''
+
+
     pixels = get_neighboring_pixels(image, i, j) 
     omega = get_omega(pixels, image)  
 
@@ -81,7 +108,9 @@ def assign_closest_sector_index_optimized(h , model: Modele, image, i, j):
             E1 += Modele.distance_congru(hn,hvp)  * sn 
 
 
-        # # ---- Compute E2: Local Contrast Preservation ----
+
+        #E2 is long to calculate, and seems useless in the thing
+
         # E2 = 0
         # for p in range(len(omega)):
         #     for q in range(len(omega)):
@@ -99,22 +128,23 @@ def assign_closest_sector_index_optimized(h , model: Modele, image, i, j):
         #             E2 += Smax_pq * (1 / hue_diff)
 
  
-        # ---- Total Energy ----
-        lambda_ = 100
-        E = E1
+        #Multiply by a constant and add E2 if you want to try the real formula
+        E = E1 
 
-        # ---- Select the Best Sector ----
         if E < min_energy:  
             min_energy = E
             closest_sector_index = idx
 
-    #print(min_energy)
     return closest_sector_index
 
 
 ############################################################## Neigboring ###############################################################################
 
 def get_neighboring_pixels(image, i, j):
+    '''
+        Returns a list of the neighboring pixels indexes
+    '''
+    
     width, height = image.size
     pixels = []
 
@@ -127,8 +157,10 @@ def get_neighboring_pixels(image, i, j):
 
 
 def get_omega(pixels, image):
+    '''
+        Returns the hue values (list) of the neighboring pixels given their indexes 
+    '''
     omega = []
-    #fill omega with the hue of the pixels
     for p in pixels:
         r, g, b = image.getpixel((p[0], p[1]))
         h, s, v = r2h(r / 255.0, g / 255.0, b / 255.0)
@@ -138,21 +170,27 @@ def get_omega(pixels, image):
 ############################################################# Harmony utils ##############################################################################
 
 def harmony_by_template(image, model: Modele):
+    '''
+        Calculate the harmony value of the image. This is a sort of arbitrary value I guess, but it's in the paper.
+    '''
+    
     sum_harmony_value = 0
     for i in range(image.size[0]):
         for j in range(image.size[1]):
             r, g, b = image.getpixel((i, j))
             hue , saturation , _ = r2h(r / 255.0, g / 255.0, b / 255.0)
-            #print("closest_edge_index : ", closest_edge_index)
             E = assign_closest_edge(hue , model) #old
-            #E = assign_closest_edge_opti(hue , model , i , j) #new does not work
-            #print("E : ", E)
+            #E = assign_closest_edge_opti(hue , model , i , j) #new
             sum_harmony_value += Modele.distance_congru(hue , E) * saturation  # Use closest edge
 
     return sum_harmony_value
 
 
 def best_angle_radians(image, template):
+    '''
+        Iterate over the given template at different angles and return the best one
+    '''
+    
     best_alpha = 0
     best_harmony_value = -float('inf')
     
@@ -172,6 +210,10 @@ def best_angle_radians(image, template):
 
 
 def best_template(image):
+    '''
+        Iterate over each template and angle for each template to get the highest harmony level.
+    '''
+
     best_harmony_value = 0.0
     best_template = None
     best_alpha = None
@@ -200,6 +242,10 @@ def best_template(image):
 
 
 def project_hue(center , variance , h):
+    '''
+        Project the given hue according to the projection formula in da paper
+    '''
+
     d = Modele.distance_congru(h, center)
     new_h = center + (variance) * (1 - math.exp(-1/2 * (( (d) ** 2) / (variance ** 2))) / math.sqrt(variance*2*math.pi))
     new_h = Modele.congru(new_h) 
@@ -209,13 +255,21 @@ def project_hue(center , variance , h):
 ############################################################# Different harmonization methods ########################################################
 
 def harmonize(image, imageOut, template: Modele, alpha):
+    ''' 
+        Harmonize a given image with a manually set template and angle.
+        This uses the naive one that just sends pixels with no regard to neighboring pixels
+    '''
+
+    #Rotate the template
     template.radRotate(alpha)
     
+    #Convert to HSV
     image = image.convert("RGB")
     width, height = image.size
     pixels = image.load()
     pixels_out = imageOut.load()
 
+    #Harmonization
     for i in range(width):
         for j in range(height):
             r, g, b = pixels[i, j]
@@ -223,28 +277,35 @@ def harmonize(image, imageOut, template: Modele, alpha):
             closest_sector_index = assign_closest_sector_index(h, template)
             central_hue = template.C[closest_sector_index]
             width = template.w[closest_sector_index]
+
+            #If already in the template, keep it
             if template.distance_secteur(h, closest_sector_index) == -1:
                 new_h = h
             else:
                 new_h = project_hue(central_hue , width/2 , h)
 
-            new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)]
+            new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)] #Convert back to RGB
             pixels_out[i, j] = (new_r, new_g, new_b)
 
     return imageOut
 
 
 def harmonize_opti(image , imageOut , template : Modele , alpha):
-    # Step 1: Rotate the template
+    ''' 
+        Harmonize a given image with a manually set template and angle.
+        This uses the optimized algorithm that fixes neighboring pb
+    '''
+
+    #Rotate the template
     template.radRotate(alpha)
     
-    # Step 2: Convert image to HSV
+    #Convert to HSV
     image = image.convert("RGB")
     width, height = image.size
     pixels = image.load()
     pixels_out = imageOut.load()
 
-    # Step 3: Apply harmonization
+    #Harmonization
     for i in range(width):
         for j in range(height):
             r, g, b = pixels[i, j]
@@ -252,34 +313,42 @@ def harmonize_opti(image , imageOut , template : Modele , alpha):
             closest_edge_index = assign_closest_sector_index_optimized(h , template , image , i , j)
             central_hue = template.C[closest_edge_index]
             width = template.w[closest_edge_index]
+
             #If already in the template, keep it
             if template.distance_secteur(h, closest_edge_index) == -1:
                 new_h = h
                 
             else:
-                # Apply the formula for color adjustment
                 new_h = project_hue(central_hue , width/2 , h)
-
-                # Check if the pixel is black
-
-                new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)]
-                # Convert back to RGB
+                new_r, new_g, new_b = [int(c * 255) for c in h2r(new_h, s, v)] #Convert back to RGB
                 pixels_out[i, j] = (new_r, new_g, new_b)
-                #pixels_out[i, j] = (int(h * 255), int(s * 255), int(v * 255))
 
     return imageOut
 
 
 def harmonize_auto_angle(image , imageOut , template : Modele):
+    ''' 
+        Harmonize a given image with a manually set template.
+        Automatically calculate the angle
+    '''
+
     alpha = best_angle_radians(image, template)
+
     print("Best angle : ", to_degrees(alpha))
+
     return harmonize(image, imageOut, template, alpha)
 
 
 def harmonize_auto(image , imageOut):
+    ''' 
+        Harmonize a given image. Automatically calculate the best angle and template.
+    '''
+
     template , alpha = best_template(image)
+
     print("Best template : ", template.type)
     print("Best angle : ", to_degrees(alpha))
+
     return harmonize(image, imageOut, template, alpha)
 
 ############################################################ Tests ########################################################################################
