@@ -38,23 +38,54 @@ def moyenne(vertices) :
     return res
 
 def reducHull(vertices, triangles, targetNbr) :
+    transform = [i for i in range(len(vertices))]
     currentNbr = len(vertices)
-    verticesPacks = [[i] for i in vertices]
-    newVertices = [i for i in vertices]
+    verticesPacks = [[v] for v in vertices]
+    newVertices = [v for v in vertices]
+    
+    # fusionne points
     while (currentNbr > targetNbr) :
-        min = distance(vertices[0], vertices[1])
-        index = [0, 1]
-        for i in range(currentNbr-1) :
-            for j in range(i+1, currentNbr) :
+        min = float('inf')
+        i0 = 0
+        i1 = 1
+        for i in range(len(vertices)-1) :
+            for j in range(i+1, len(vertices)) :
                 d = distance(newVertices[i], newVertices[j])
                 if (d < min) :
                     min = d
-                    index = [i, j]
-        verticesPacks[index[0]] += verticesPacks.pop(index[1])
-        newVertices[index[0]] = moyenne(verticesPacks[index[0]])
-        newVertices.pop(index[1])
+                    i0, i1 = (i, j)
+        verticesPacks[i0] += verticesPacks[i1]
+        verticesPacks[i1] = []
+        newVertices[i0] = moyenne(verticesPacks[i0])
+        transform[i1] = i0
         currentNbr -= 1
-    return newVertices
+    
+    # retire les triangles inutiles et réassigne aux nouveaux points
+    it = 0
+    while (it < len(triangles)) :
+        for p in range(3) :
+            id = triangles[it][p]
+            while (id != transform[id]) :
+                id = transform[id]
+            triangles[it][p] = id
+        if (triangles[it][0] == triangles[it][1] or triangles[it][0] == triangles[it][2] or triangles[it][1] == triangles[it][2]) :
+            triangles.pop(it)
+        else :
+            it += 1
+    
+    # réindex les points et les triangles
+    V = [newVertices[0]]
+    carte = [0 for i in range(len(vertices))]
+    for i in range(1, len(vertices)) :
+        carte[i] = carte[i-1]
+        if (verticesPacks[i] == []) :
+            carte[i] += 1
+        else :
+            V.append(newVertices[i])
+    for it in range(len(triangles)) :
+        for p in range(3) :
+            triangles[it][p] -= carte[triangles[it][p]]
+    return V, triangles
 
 def harmonization(imIn, nbColor) :
     #0 Récupérer les données de l'image
@@ -63,7 +94,7 @@ def harmonization(imIn, nbColor) :
     RGB_hull = ss.ConvexHull(data)
     RGB_vertices, RGB_triangles = extractVT(RGB_hull, data)
     #2 calcul de la palette
-    RGB_reduc_conv = reducHull(RGB_vertices, RGB_triangles, nbColor)
+    RGB_vertices, RGB_triangles = reducHull(RGB_vertices, RGB_triangles, nbColor)
     #2.5 étirer les points pour réenvelopper ce qui est sorti
     #3 calcul de l'enveloppe convexe RGBXY
     #4 calcul des coordonnées barycentrique RGB et RGBXY
