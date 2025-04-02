@@ -3,6 +3,27 @@ from PIL import Image
 import scipy.spatial as ss #import ConvexHull
 import numpy as np
 
+def m(v1, v2) :
+    return [v1[i]-v2[i] for i in range(len(v1))]
+def vect(v1, v2) :
+    t = len(v1)
+    return [v1[(i+1)%t]*v2[(i+2)%t] - v1[(i+2)%t]*v2[(i+1)%t] for i in range(t)]
+def normalize(v) :
+    l = 0
+    for i in v :
+        l += i**2
+    l = math.sqrt(l)
+    return [v[i]/l for i in range(len(v))]
+def dot(v1, v2) :
+    res = 0
+    for i in range(len(v1)) :
+        res += v1[i]*v2[i]
+    return res
+def n(v) :
+    return [-v[i] for i in range(len(v))]
+def p(v1, v2) :
+    return [v1[i]+v2[i] for i in range(len(v1))]
+
 def loadData(imIn) :
     # récupère les données d'une image pour les mettre dans un array numpy au bon format
     nbx = imIn.size[0]
@@ -87,6 +108,36 @@ def reducHull(vertices, triangles, targetNbr) :
             triangles[it][p] -= carte[triangles[it][p]]
     return V, triangles
 
+def computeNormal(v, t) :
+    triangleNormals = [0 for i in range(len(t))]
+    vertexNormals = [[0, 0, 0] for i in range(len(v))]
+    nbNormals = [0 for i in range(len(v))]
+    for i in range(len(t)) :
+        # calcul la normal du triangle
+        v1 = m(v[t[i][2]], v[t[i][0]])
+        v2 = m(v[t[i][1]], v[t[i][0]])
+        triangleNormals[i] = normalize(vect(v1, v2))
+        # sens de la normal
+        p = v[0]
+        if (t[i][0] == 0 or t[i][1] == 0 or t[i][2] == 0) :
+            p = v[1]
+            if (t[i][0] == 1 or t[i][1] == 1 or t[i][2] == 1) :
+                p = v[2]
+                if (t[i][0] == 2 or t[i][1] == 2 or t[i][2] == 2) :
+                    p = v[3]
+        p = normalize(m(v[t[i][0]], p))
+        if dot(triangleNormals[i], p) < 0 :
+            triangleNormals[i] = n(triangleNormals[i])
+        # calcul la normal des points
+        for j in range(3) :
+            vertexNormals[t[i][j]] = p(vertexNormals[t[i][j]], triangleNormals[i])
+            nbNormals += 1
+    for i in range(len(vertexNormals)) :
+        for j in range(3) :
+            vertexNormals[i][j] /= nbNormals[i]
+    return vertexNormals
+        
+
 def harmonization(imIn, nbColor) :
     #0 Récupérer les données de l'image
     data = loadData(imIn)
@@ -95,6 +146,7 @@ def harmonization(imIn, nbColor) :
     RGB_vertices, RGB_triangles = extractVT(RGB_hull, data)
     #2 calcul de la palette
     RGB_vertices, RGB_triangles = reducHull(RGB_vertices, RGB_triangles, nbColor)
+    RGB_normals = computeNormal(RGB_vertices, RGB_triangles)
     #2.5 étirer les points pour réenvelopper ce qui est sorti
     #3 calcul de l'enveloppe convexe RGBXY
     #4 calcul des coordonnées barycentrique RGB et RGBXY
