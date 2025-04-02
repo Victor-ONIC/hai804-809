@@ -15,6 +15,13 @@ def loadData(imIn) :
     npdata = np.array(ldata)
     return npdata
 
+def extractVT(hull, data) :
+    v = hull.vertices
+    vertices = data[v]
+    dico = {val : i for i, val in enumerate(v)}
+    triangles = [[dico[t[0]], dico[t[1]], dico[t[2]]] for t in hull.simplices]
+    return (vertices, triangles)
+
 def distance(v1, v2) :
     res = 0
     for i in range(len(v1)) :
@@ -30,7 +37,7 @@ def moyenne(vertices) :
         res[i] /= len(vertices)
     return res
 
-def reducHull(vertices, targetNbr) :
+def reducHull(vertices, triangles, targetNbr) :
     currentNbr = len(vertices)
     verticesPacks = [[i] for i in vertices]
     newVertices = [i for i in vertices]
@@ -53,10 +60,10 @@ def harmonization(imIn, nbColor) :
     #0 Récupérer les données de l'image
     data = loadData(imIn)
     #1 calcul de l'enveloppe convexe RGB
-    RGB_conv = ss.ConvexHull(data)
-    RGB_vertices = data[RGB_conv.vertices]
+    RGB_hull = ss.ConvexHull(data)
+    RGB_vertices, RGB_triangles = extractVT(RGB_hull, data)
     #2 calcul de la palette
-    RGB_reduc_conv = reducHull(RGB_vertices, nbColor)
+    RGB_reduc_conv = reducHull(RGB_vertices, RGB_triangles, nbColor)
     #2.5 étirer les points pour réenvelopper ce qui est sorti
     #3 calcul de l'enveloppe convexe RGBXY
     #4 calcul des coordonnées barycentrique RGB et RGBXY
