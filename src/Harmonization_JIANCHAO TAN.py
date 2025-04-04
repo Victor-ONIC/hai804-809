@@ -51,7 +51,7 @@ def loadData(imIn) :
     ldata = [[0, 0, 0] for i in range(nbx*nby)]
     for i in range(nbx) :
         for j in range(nby) :
-            ldata[j*nbx+i][0], ldata[j*nbx+i][1], ldata[j*nbx+i][2] = dataIn[i, j]
+            ldata[i*nby+j][0], ldata[i*nby+j][1], ldata[i*nby+j][2] = dataIn[i, j]
     npdata = np.array(ldata)
     return npdata
 
@@ -160,9 +160,9 @@ def loadXYData(imIn) :
     ldata = [[0, 0, 0, 0, 0] for i in range(nbx*nby)]
     for i in range(nbx) :
         for j in range(nby) :
-            ldata[j*nbx+i][0], ldata[j*nbx+i][1], ldata[j*nbx+i][2] = dataIn[i, j]
-            ldata[j*nbx+i][3] = i
-            ldata[j*nbx+i][4] = j
+            ldata[i*nby+j][0], ldata[i*nby+j][1], ldata[i*nby+j][2] = dataIn[i, j]
+            ldata[i*nby+j][3] = i
+            ldata[i*nby+j][4] = j
     npdata = np.array(ldata)
     return npdata
 
@@ -204,7 +204,7 @@ def Star_coordinates(vertices, data) :
         barycoords[np.ix_(mask,s)] = b[mask]
     return barycoords
 
-def harmonization(imIn, nbColor) :
+def computePalette(imIn, nbColor) :
     #0 Récupérer les données de l'image
     data = loadData(imIn)
     #1 calcul de l'enveloppe convexe RGB
@@ -214,11 +214,9 @@ def harmonization(imIn, nbColor) :
     RGB_vertices, RGB_triangles = reducHull(RGB_vertices, RGB_triangles, nbColor)
     RGB_normals = computeNormal(RGB_vertices, RGB_triangles)
     palette = projectHull(RGB_vertices, RGB_normals)
-    print(palette)
-    for i in range(nbColor) :
-        couleur = [(palette[i][0]/maxRGB, palette[i][1]/maxRGB, palette[i][2]/maxRGB)]
-        plt.scatter(i, 0, c = couleur, s=200)
-    plt.show()
+    return palette
+
+def computeW(imIn, palette) :
     #3 calcul de l'enveloppe convexe RGBXY
     XYdata = loadXYData(imIn)
     XY_hull = spat.ConvexHull(XYdata)
@@ -227,7 +225,17 @@ def harmonization(imIn, nbColor) :
     W_XY = Delaunay_coordinates(XY_vertices, XYdata)
     W_RGB = Star_coordinates(np.array(palette), XY_vertices[:,:3])
     #5 multiplication des matrices de coordonnées pour avoir la proportion de chaque couleur de la palette
-    W = W_XY.dot( W_RGB )
+    W = W_XY.dot(W_RGB)
+    return W
+
+def harmonization(imIn, nbColor) :
+    palette = computePalette(imIn, nbColor)
+    print(palette)
+    for i in range(nbColor) :
+        couleur = [(palette[i][0]/maxRGB, palette[i][1]/maxRGB, palette[i][2]/maxRGB)]
+        plt.scatter(i, 0, c = couleur, s=200)
+    plt.show()
+    W = computeW(imIn, palette)
     newPalette = [[0, 0, 0] for i in range(nbColor)]
     for i in range(nbColor) :
         r = float(input("new color R"))
@@ -237,7 +245,26 @@ def harmonization(imIn, nbColor) :
         couleur = [(newPalette[i][0]/maxRGB, newPalette[i][1]/maxRGB, newPalette[i][2]/maxRGB)]
         plt.scatter(i, 0, c = couleur, s=200)
     plt.show()
+    imOut = Image.new(imIn.mode, imIn.size)
+    dataOut = imOut.load()
+    nbx = imIn.size[0]
+    nby = imIn.size[1]
+    print(len(W))
+    print(nbx*nby)
+    for i in range(nbx) :
+        for j in range(nby) :
+            w = W[i*nby+j]
+            couleur = [0, 0, 0]
+            for p in range(nbColor) :
+                couleur = plus(couleur, s(w[p], newPalette[p]))
+                r, g, b = couleur
+            dataOut[i, j] = (int(r), int(g), int(b))
+            #print(w)
+    return imOut
 
 nameImIn = "images\colorful.ppm"
 imIn = Image.open(nameImIn)
-harmonization(imIn, 4)
+imOut = harmonization(imIn, 4)
+imIn.close()
+imOut.save("images\TanTest.ppm")
+imOut.close()
