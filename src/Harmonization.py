@@ -8,6 +8,11 @@ from colorsys import rgb_to_hsv as r2h
 from colorsys import hsv_to_rgb as h2r
 from utils.Modele import Modele
 import time
+import numpy as np
+
+
+#tryna multithread
+import threading
 
 
 ############################################################## Utils ################################################################################""
@@ -108,8 +113,6 @@ def assign_closest_sector_index_optimized(model: Modele, image, i, j):
             hvp = project_hue(central_hue , model.w[idx]/2 , hn)
             E1 += Modele.distance_congru(hn,hvp)  * sn 
 
-
-
         #E2 is long to calculate, and seems useless in the thing
 
         # E2 = 0
@@ -170,6 +173,16 @@ def get_omega(pixels, image):
 
 ############################################################# Harmony utils ##############################################################################
 
+def preprocess_hsv(image):
+    hsv_image = []
+    for i in range(image.size[0]):
+        for j in range(image.size[1]):
+            r, g, b = image.getpixel((i, j))
+            h, s, v = r2h(r / 255.0, g / 255.0, b / 255.0)
+            hsv_image.append((h, s , v))
+    return hsv_image
+
+
 def harmony_by_template(image, model: Modele):
     '''
         Calculate the harmony value of the image. This is a sort of arbitrary value I guess, but it's in the paper.
@@ -180,11 +193,20 @@ def harmony_by_template(image, model: Modele):
         for j in range(image.size[1]):
             r, g, b = image.getpixel((i, j))
             hue , saturation , _ = r2h(r / 255.0, g / 255.0, b / 255.0)
-            #E = assign_closest_edge(hue , model) #old
-            E = assign_closest_edge_opti(hue , image , model , i , j) #new
+            E = assign_closest_edge(hue , model) #old
+            #E = assign_closest_edge_opti(hue , image , model , i , j) #new
             sum_harmony_value += Modele.distance_congru(hue , E) * saturation  # Use closest edge
 
     return sum_harmony_value
+
+
+def harmony_by_template_fast(hsv_image, model: Modele):
+    hues = np.array([h for h, s in hsv_image])
+    sats = np.array([s for h, s in hsv_image])
+    edges = np.array([assign_closest_edge(h, model) for h in hues])
+    distances = np.array([Modele.distance_congru(h, e) for h, e in zip(hues, edges)])
+    return np.sum(distances * sats)
+
 
 
 def best_angle_radians(image, template):
@@ -197,17 +219,29 @@ def best_angle_radians(image, template):
     
     original_C = template.C[:] 
     
-    for alpha in [to_radians(a) for a in range(0, 360, 10)]:
+    for alpha in [to_radians(a) for a in range(0, 360, 30)]:
         template.radRotate(alpha) 
         harmony_value = harmony_by_template(image, template)
         
         if harmony_value > best_harmony_value:
             best_harmony_value = harmony_value
             best_alpha = alpha
-    
+
         template.C = original_C[:]  # Restore original template
 
-    return best_alpha
+    deg_alpha:int = int(to_degrees(alpha))
+    for alpha in [to_radians(a) for a in range(deg_alpha-20 , deg_alpha+20 , 5)]:
+        template.radRotate(alpha) 
+        harmony_value = harmony_by_template(image, template)
+        
+        if harmony_value > best_harmony_value:
+            best_harmony_value = harmony_value
+            best_alpha = alpha
+
+        template.C = original_C[:]  # Restore original template
+    
+
+    return (2*math.pi) - best_alpha
 
 
 def best_template(image):
@@ -219,22 +253,19 @@ def best_template(image):
     best_template = None
     best_alpha = None
     for template_name in Modele.get_liste_modeles():
-        try:
-            template = Modele(template_name)
-            alpha = best_angle_radians(image, template)
-            harmony_value = harmony_by_template(image, template)
-            
-            # Ensure harmony_value is a valid number
-            if not isinstance(harmony_value, (int, float)) or math.isnan(harmony_value) or math.isinf(harmony_value):
-                raise ValueError(f"Invalid harmony value: {harmony_value}")
-            
-            if harmony_value > best_harmony_value:
-                best_harmony_value = harmony_value
-                best_template = template
-                best_alpha = alpha
-        except Exception as e:
-            print(f"Error processing template {template_name}: {e}")
-            continue
+        template = Modele(template_name)
+        alpha = best_angle_radians(image, template)
+        harmony_value = harmony_by_template(image, template)
+        
+        # Ensure harmony_value is a valid number
+        if not isinstance(harmony_value, (int, float)) or math.isnan(harmony_value) or math.isinf(harmony_value):
+            raise ValueError(f"Invalid harmony value: {harmony_value}")
+        
+        if harmony_value > best_harmony_value:
+            best_harmony_value = harmony_value
+            best_template = template
+            best_alpha = alpha
+
 
     if best_template is None or best_alpha is None:
         raise ValueError("No valid template or angle found for the given image.")
@@ -303,14 +334,21 @@ def harmonize_opti(image , imageOut , template : Modele , alpha):
     #Convert to HSV
     image = image.convert("RGB")
     width, height = image.size
-    pixels = image.load()
     pixels_out = imageOut.load()
+
+    hsv_image = preprocess_hsv(image)
+    h_array = np.array([h for h, _, _ in hsv_image]).reshape(height, width)
+    s_array = np.array([s for _, s, _ in hsv_image]).reshape(height, width)  
+    v_array = np.array([v for _, _, v in hsv_image]).reshape(height, width)   
 
     #Harmonization
     for i in range(width):
         for j in range(height):
-            r, g, b = pixels[i, j]
-            h, s, v = r2h(r / 255.0, g / 255.0, b / 255.0)
+
+            h = h_array[j , i]
+            s = s_array[j , i]
+            v = v_array[j , i]
+
             closest_edge_index = assign_closest_sector_index_optimized(template , image , i , j)
             central_hue = template.C[closest_edge_index]
             sector_width = template.w[closest_edge_index]
@@ -361,26 +399,29 @@ im = Image.open(nameImage)
 imOut = Image.new(im.mode, im.size)
 
 template = Modele("I")
+alpha = to_radians(200)
 
-print("Harmonization opti")
-# Measure time for harmonize_opti
-start_time = time.time()
-imOut2 = Image.new(im.mode, im.size)
-harmonize_opti(im, imOut2, template, to_radians(45))
-imOut2.save("./src/images/30on30HSV.jpg")
-print("Time for harmonize_opti:", time.time() - start_time, "seconds")
+# print("Harmonization opti")
+# # Measure time for harmonize_opti
+# start_time = time.time()
+# imOut2 = Image.new(im.mode, im.size)
+# harmonize_opti(im, imOut2, template, to_radians(45))
+# imOut2.save("./src/images/30on30HSV.jpg")
+# print("Time for harmonize_opti:", time.time() - start_time, "seconds")
 
-# Measure time for harmonize_auto_angle
-start_time = time.time()
-imOut4 = Image.new(im.mode, im.size)
-harmonize_auto_angle(im, imOut4, template)
-imOut4.save("./src/images/30on30AutoAngle.jpg")
-print("Time for harmonize_auto_angle:", time.time() - start_time, "seconds")
+# # Measure time for harmonize_auto_angle
+# start_time = time.time()
+# imOut4 = Image.new(im.mode, im.size)
+# harmonize_auto_angle(im, imOut4, template)
+# imOut4.save("./src/images/30on30AutoAngle.jpg")
+# print("Time for harmonize_auto_angle:", time.time() - start_time, "seconds")
 
 # Measure time for harmonize_auto
+print("Starting to save")
 start_time = time.time()
 imOut3 = Image.new(im.mode, im.size)
+#harmonize_auto(im, imOut3)
 harmonize_auto(im, imOut3)
-imOut3.save("./src/images/30on30Auto.jpg")
+imOut3.save("./src/images/5_opti.jpg")
 print("Time for harmonize_auto:", time.time() - start_time, "seconds")
 
