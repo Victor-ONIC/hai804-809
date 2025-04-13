@@ -248,7 +248,6 @@ def harmony_by_template_fastest(h_array, s_array, v_array, template_w, template_
             saturation = s_array[i, j]         
             closest_edge = assign_closest_edge_opti_jit(hue, h_array, s_array, v_array, template_w, template_c, template_edges, i, j)
             sum_harmony_value += distance_congru_jit(hue, closest_edge) * saturation
-    
     return sum_harmony_value
 
 
@@ -530,12 +529,18 @@ def harmonize_auto(image, imageOut):
     for template_name in Modele.get_liste_modeles():
     #for template_name in "V":
         template = Modele(template_name)
+
+        alpha = best_angle_radians(h_array, s_array, v_array, template)
+        if(template_name == "T"):
+            print("alpha : " , to_degrees(alpha))
+
+        template.radRotate(alpha)
         template_c = template.C
         template_w = template.w
         template_edges = np.array([template.bord(i) for i in range(len(template_c))])  
         
-        alpha = best_angle_radians(h_array, s_array, v_array, template)
         harmony_value = harmony_by_template_fastest(h_array, s_array, v_array, template_w, template_c, template_edges)
+        print("Template : ", template_name, " value : " , harmony_value)
         if harmony_value > best_val:
             best_val = harmony_value
             best_tmpl = template
@@ -552,7 +557,7 @@ def color_harmonisation(imIn, template_name):
 
     imOut = Image.new(imIn.mode, imIn.size)
 
-    if template_name == "auto":
+    if template_name == "Auto":
         harmonize_auto(imIn, imOut)
     else :
         template = Modele(template_name)
@@ -580,11 +585,11 @@ print("Harmonization opti")
 # print("Time for harmonize_opti:", time.time() - start_time, "seconds")
 
 # # Measure time for harmonize_auto_angle
-start_time = time.time()
-imOut4 = Image.new(im.mode, im.size)
-harmonize_auto_angle(im, imOut4, template)
-imOut4.save("./src/images/30on30AutoAngle.jpg")
-print("Time for harmonize_auto_angle:", time.time() - start_time, "seconds")
+# start_time = time.time()
+# imOut4 = Image.new(im.mode, im.size)
+# harmonize_auto_angle(im, imOut4, template)
+# imOut4.save("./src/images/30on30AutoAngle.jpg")
+# print("Time for harmonize_auto_angle:", time.time() - start_time, "seconds")
 
 
 #Profile the harmonize_auto_angle function for performance analysis
@@ -595,10 +600,10 @@ print("Time for harmonize_auto_angle:", time.time() - start_time, "seconds")
 # print("Done")
 
 # Measure time for harmonize_auto
-# print("Starting to save auto")
-# start_time = time.time()
-# imOut3 = Image.new(im.mode, im.size)
-# harmonize_auto(im, imOut3)
-# imOut3.save("./src/images/peacock_fullauto.jpg")
-# print("Time for harmonize_auto:", time.time() - start_time, "seconds")
+print("Starting to save auto")
+start_time = time.time()
+imOut3 = Image.new(im.mode, im.size)
+harmonize_auto(im, imOut3)
+imOut3.save("./src/images/peacock_fullauto.jpg")
+print("Time for harmonize_auto:", time.time() - start_time, "seconds")
 
