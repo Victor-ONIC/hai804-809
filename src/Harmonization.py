@@ -548,6 +548,18 @@ def harmonize_auto(image, imageOut):
 
     return harmonize_opti_from_arrays(h_array, s_array, v_array, imageOut, best_tmpl, best_alpha)
 
+def color_harmonisation(imIn, template_name):
+
+    imOut = Image.new(imIn.mode, imIn.size)
+
+    if template_name == "auto":
+        harmonize_auto(imIn, imOut)
+    else :
+        template = Modele(template_name)
+        harmonize_auto_angle(imIn, imOut, template)
+        
+    #imOut.save(filename)
+    return imOut
 
 ############################################################ Tests ########################################################################################
 
