@@ -38,13 +38,13 @@ class Modele :
                 self.C = [1/4]
                 self.w = [self.lw]
             case "L" :
-                self.C = [0, 1/4]
+                self.C = [0., 1/4]
                 self.w = [self.lw, self.sw]
             case "I" :
                 self.C = [1/4, 3/4]
                 self.w = [self.sw, self.sw]
             case "T" :
-                self.C = [0]
+                self.C = [0.]
                 self.w = [1/2]
             case "Y" :
                 self.C = [1/4, 3/4]
