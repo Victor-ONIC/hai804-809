@@ -180,18 +180,17 @@ def reducHull2(vertices0, triangles0, targetNbr) :
                 for p in range(2) :
                     for t in trianglesPerVertices[edge[p]] :
                         triangle = triangles[t]
-                        if triangle == [] :
-                            break
-                        v = [0, 0, 0]
-                        while (triangle[v[0]] != edge[p]) :
-                            v[0] += 1
-                        v[1] = (v[0]+1)%3
-                        v[2] = (v[0]+2)%3
-                        if (triangle[v[1]] != edge[not p] and triangle[v[2]] != edge[not p]) :
-                            triangles2[p].append([triangle[v[1]], triangle[v[2]]])
-                            for i in range(1, 3) :
-                                if (not (triangle[v[i]] in edges2[p])) :
-                                    edges2[p].append(triangle[v[i]])
+                        if (triangle != []) :
+                            v = [0, 0, 0]
+                            while (triangle[v[0]] != edge[p]) :
+                                v[0] += 1
+                            v[1] = (v[0]+1)%3
+                            v[2] = (v[0]+2)%3
+                            if (triangle[v[1]] != edge[not p] and triangle[v[2]] != edge[not p]) :
+                                triangles2[p].append([triangle[v[1]], triangle[v[2]]])
+                                for i in range(1, 3) :
+                                    if (not (triangle[v[i]] in edges2[p])) :
+                                        edges2[p].append(triangle[v[i]])
                 minInter = [10000000, 10000000]
                 minVertex = [[], []]
                 for p in range(2) :
@@ -227,11 +226,16 @@ def reducHull2(vertices0, triangles0, targetNbr) :
                     nearPoint.append(sin2)
                 else :
                     nearPoint = nearPointSeg(minVertex[0], minVertex[1], vertices[edge[0]], vertices[edge[1]])
-                if (nearPoint[1] < minDist) :
-                    minDist = nearPoint[1]
-                    newVertex = nearPoint[0]
-                    oldEdge = edge
-                    bestId = id
+                test = True
+                for i in range(3) :
+                    if (nearPoint[0][i]<0 or nearPoint[0][i]>maxRGB) :
+                        test = False
+                if (test) :
+                    if (nearPoint[1] < minDist) :
+                        minDist = nearPoint[1]
+                        newVertex = nearPoint[0]
+                        oldEdge = edge
+                        bestId = id
         if (oldEdge == []) :
             break
         vertices[oldEdge[0]] = newVertex
@@ -423,10 +427,20 @@ def computePalette(imIn, nbColor) :
     #0 Récupérer les données de l'image
     data = loadData(imIn)
     #1 calcul de l'enveloppe convexe RGB
+    RGB_vertices = []
+    oldSize = -1
+    size = 0
     RGB_hull = spat.ConvexHull(data)
     RGB_vertices, RGB_triangles = extractVT(RGB_hull, data)
-    #2 calcul de la palette
-    RGB_vertices, RGB_triangles = reducHull2(RGB_vertices, RGB_triangles, nbColor)
+    while (size != oldSize) :
+        RGB_hull = spat.ConvexHull(data)
+        RGB_vertices, RGB_triangles = extractVT(RGB_hull, data)
+        #2 calcul de la palette
+        RGB_vertices, RGB_triangles = reducHull2(RGB_vertices, RGB_triangles, len(RGB_vertices)-1)
+        oldSize = size
+        size = len(RGB_vertices)
+        data = np.array(RGB_vertices)
+        print(size)
     #RGB_normals = computeNormal(RGB_vertices, RGB_triangles)
     palette = RGB_vertices #projectHull(RGB_vertices, RGB_normals)
     return palette
@@ -438,7 +452,9 @@ def computeW(imIn, palette) :
     XY_vertices_hull = XYdata[XY_hull.vertices]
     #4 calcul des coordonnées barycentrique RGB et RGBXY
     W_XY = Delaunay_coordinates(XY_vertices_hull, XYdata)
+    print("xy \n", W_XY, "\nyo")
     W_RGB = Star_coordinates(np.array(palette), XY_vertices_hull[:,:3])
+    print("rgb \n", W_RGB)
     #5 multiplication des matrices de coordonnées pour avoir la proportion de chaque couleur de la palette
     W = W_XY.dot(W_RGB)
     return W
@@ -467,6 +483,7 @@ def harmonization(imIn, nbColor) :
         plt.scatter(i, 0, c = couleur, s=200)
     plt.show()
     W = computeW(imIn, hull_vertex)
+    print(W)
     newPalette = [[0, 0, 0] for i in range(paletteSize)]
     for i in range(paletteSize) :
         r = float(input("new color R"))
