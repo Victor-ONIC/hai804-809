@@ -12,10 +12,15 @@ def m(v1, v2) :
     return [v1[i]-v2[i] for i in range(len(v1))]
 def plus(v1, v2) :
     return [v1[i]+v2[i] for i in range(len(v1))]
-def n(v) :
+def neg(v) :
     return [-v[i] for i in range(len(v))]
 def s(s, v) :
     return [s*v[i] for i in range(len(v))]
+def normSquare(v) :
+    res = 0
+    for i in v :
+        res += i*i
+    return res
 def vect(v1, v2) :
     t = len(v1)
     return [v1[(i+1)%t]*v2[(i+2)%t] - v1[(i+2)%t]*v2[(i+1)%t] for i in range(t)]
@@ -43,6 +48,34 @@ def moyenne(vertices) :
         res[i] /= len(vertices)
     return res
 
+def Gauss3(u, v, n, c) : # retourne (b, z), tel que xu + yv + zn = c et b = solutionExist
+    i = 0
+    if (u[0] == 0) :
+        if (u[1] == 0) :
+            i = 2
+        else :
+            i = 1
+    j = (i+1)%3
+    k = (i+2)%3
+    uji = u[j]/u[i]
+    vji = v[j]-v[i]*uji
+    if (vji == 0) :
+        j = k
+        k = (i+1)%3
+        uji = u[j]/u[i]
+        vji = v[j]-v[i]*uji
+        if (vji == 0) :
+            return [False]
+    uki = u[k]/u[i]
+    vki = (v[k]-v[i]*uki)/vji
+    nji = n[j]-n[i]*uji
+    z1 = n[k]-n[i]*uki-nji*vki
+    if (z1 == 0) :
+        return [False]
+    cji = c[j]-c[i]*uji
+    return [True, (c[k] - c[i]*uki - cji*vki)/z1]
+    
+
 def loadData(imIn) :
     # récupère les données d'une image pour les mettre dans un array numpy au bon format
     nbx = imIn.size[0]
@@ -61,6 +94,188 @@ def extractVT(hull, data) :
     dico = {val : i for i, val in enumerate(v)}
     triangles = [[dico[t[0]], dico[t[1]], dico[t[2]]] for t in hull.simplices]
     return (vertices, triangles)
+
+def nearPointSeg(a, b, c, d) :
+    ba = m(b, a)
+    dc = m(d, c)
+    ac = m(a, c)
+    badc = dot(ba, dc)
+    dcac = dot(dc, ac)
+    A = badc*badc
+    B = badc*dcac
+    C = dcac*dcac
+    D = dot(ba, ba)
+    E = dot(ba, ac)
+    F = dot(ac, ac)
+    aa = A*E - B*D
+    bb = A*F - C*D
+    x = [0, 1]
+    im = [C/F, (A+2*B+C)/(D+2*E+F)]
+    if (aa == 0) :
+        if (bb != 0) :
+            x0 = (B*F - C*E)/bb
+            if (x0>0 and x0<1) :
+                under = D*x0*x0+2*E*x0+F
+                if (under != 0) :
+                    x.append(x0)
+                    im.append((A*x0*x0+2*B*x0+C)/under)
+    else :
+        delta = bb*bb - 4*aa*(B*F - C*E)
+        if (delta == 0) :
+            x0 = -bb/(2*aa)
+            if (x0>0 and x0<1) :
+                under = D*x0*x0+2*E*x0+F
+                if (under != 0) :
+                    x.append(x0)
+                    im.append((A*x0*x0+2*B*x0+C)/under)
+        if (delta > 0) :
+            sd = math.sqrt(delta)
+            x0 = (-bb+sd)/(2*aa)
+            if (x0>0 and x0<1) :
+                under0 = D*x0*x0+2*E*x0+F
+                if (under0 != 0) :
+                    x.append(x0)
+                    im.append((A*x0*x0+2*B*x0+C)/under0)
+            x1 = (-bb-sd)/(2*aa)
+            if (x1>0 and x1<1) :
+                under1 = D*x1*x1+2*E*x1+F
+                if (under1 != 0) :
+                    x.append(x1)
+                    im.append((A*x1*x1+2*B*x1+C)/under1)
+    index = 0
+    for i in range(1, len(x)) :
+        if (im[i] > im[index]) :
+            index = i
+    if (x[index] == 0) :
+        return (a, 1-im[index])
+    elif (x[index] == 1) :
+        return (b, 1-im[index])
+    else :
+        return (plus(a, s(x[index], ba)), 1-im[index])
+
+def reducHull2(vertices0, triangles0, targetNbr) :
+    vertices = [v for v in vertices0]
+    triangles = [[t[0], t[1], t[2]] for t in triangles0]
+    transform = [i for i in range(len(vertices0))]
+    nbVertices = len(vertices)
+    trianglesPerVertices = [[] for i in range(len(vertices))]
+    edges = []
+    for t in range(len(triangles)) :
+        for v in range(3) :
+            trianglesPerVertices[triangles[t][v]].append(t)
+            edge = [triangles[t][v], triangles[t][(v+1)%3]]
+            if (edge[0] > edge[1]) :
+                edge = [edge[1], edge[0]]
+            if (not (edge in edges)) :
+                edges.append(edge)
+    while (nbVertices > targetNbr) :
+        minDist = 10000000
+        newVertex = []
+        oldEdge = []
+        bestId = 0
+        for id, edge in enumerate(edges) :
+            if (edge != []) :
+                edges2 = [[], []]
+                triangles2 = [[], []]
+                for p in range(2) :
+                    for t in trianglesPerVertices[edge[p]] :
+                        triangle = triangles[t]
+                        if triangle == [] :
+                            break
+                        v = [0, 0, 0]
+                        while (triangle[v[0]] != edge[p]) :
+                            v[0] += 1
+                        v[1] = (v[0]+1)%3
+                        v[2] = (v[0]+2)%3
+                        if (triangle[v[1]] != edge[not p] and triangle[v[2]] != edge[not p]) :
+                            triangles2[p].append([triangle[v[1]], triangle[v[2]]])
+                            for i in range(1, 3) :
+                                if (not (triangle[v[i]] in edges2[p])) :
+                                    edges2[p].append(triangle[v[i]])
+                minInter = [10000000, 10000000]
+                minVertex = [[], []]
+                for p in range(2) :
+                    for e in edges2[p] :
+                        maxInter = 0
+                        n = m(vertices[e], vertices[edge[p]])
+                        c = m(vertices[edge[p]], vertices[edge[not p]])
+                        for triangle in triangles2[not p] :
+                            u = m(vertices[edge[not p]], vertices[triangle[0]])
+                            v = m(vertices[edge[not p]], vertices[triangle[1]])
+                            inter = Gauss3(u, v, n, c)
+                            if (inter[0]) :
+                                if (inter[1]>maxInter) :
+                                    maxInter = inter[1]
+                        if (maxInter != 0) :
+                            vertex = plus(vertices[edge[p]], s(-maxInter, n))
+                            v1 = m(vertex, vertices[edge[p]])
+                            v2 = neg(c)
+                            temp = dot(v1, v2)
+                            cos2 = temp*temp/normSquare(v2)/normSquare(v1)
+                            sin2 = 1-cos2
+                            if (sin2 < minInter[p]) :
+                                minInter[p] = sin2
+                                minVertex[p] = vertex
+                nearPoint = []
+                if (minVertex[0] == []) :
+                    nearPoint.append(minVertex[1])
+                    v1 = m(minVertex[1], vertices[edge[0]])
+                    v2 = m(vertices[edge[1]], vertices[edge[0]])
+                    temp = dot(v1, v2)
+                    cos2 = temp*temp/normSquare(v2)/normSquare(v1)
+                    sin2 = 1-cos2
+                    nearPoint.append(sin2)
+                else :
+                    nearPoint = nearPointSeg(minVertex[0], minVertex[1], vertices[edge[0]], vertices[edge[1]])
+                if (nearPoint[1] < minDist) :
+                    minDist = nearPoint[1]
+                    newVertex = nearPoint[0]
+                    oldEdge = edge
+                    bestId = id
+        if (oldEdge == []) :
+            break
+        vertices[oldEdge[0]] = newVertex
+        vertices[oldEdge[1]] = newVertex
+        transform[oldEdge[1]] = oldEdge[0]
+        edges[bestId] = []
+        for i, t in enumerate(trianglesPerVertices[oldEdge[0]]) :
+            if (oldEdge[0] in triangles[t]) and (oldEdge[1] in triangles[t]) :
+                triangles[t] = []
+                trianglesPerVertices[oldEdge[0]].pop(i)
+        for i, t in enumerate(trianglesPerVertices[oldEdge[1]]) :
+            if (oldEdge[0] in triangles[t]) and (oldEdge[1] in triangles[t]) :
+                s0 = 0
+                while (triangles[t][s0] == oldEdge[0] or triangles[t][s0] == oldEdge[1]) :
+                    s0 += 1
+                edge = [min(triangles[t][s0], oldEdge[1]), max(triangles[t][s0], oldEdge[1])]
+                for e in range(len(edges)) :
+                    if (edges[e] == edge) :
+                        edges[e] = []                
+                trianglesPerVertices[oldEdge[1]].pop(i)
+        nbVertices -= 1
+
+    newTriangles = []
+    for t in triangles :
+        if (t != []) :
+            newTriangles.append(t)
+            for p in range(3) :
+                id = t[p]
+                while (id != transform[id]) :
+                    id = transform[id]
+                newTriangles[-1][p] = id
+    
+    finalVertices = [vertices[0]]
+    carte = [0 for i in range(len(vertices))]
+    for i in range(1, len(vertices)) :
+        carte[i] = carte[i-1]
+        if (transform[i] != i) :
+            carte[i] += 1
+        else :
+            finalVertices.append(vertices[i])
+    for it in range(len(newTriangles)) :
+        for p in range(3) :
+            newTriangles[it][p] -= carte[newTriangles[it][p]]
+    return finalVertices, newTriangles
 
 def reducHull(vertices, triangles, targetNbr) :
     transform = [i for i in range(len(vertices))]
@@ -132,7 +347,7 @@ def computeNormal(v, t) :
                     p = v[3]
         p = normalize(m(v[t[i][0]], p))
         if dot(triangleNormals[i], p) < 0 :
-            triangleNormals[i] = n(triangleNormals[i])
+            triangleNormals[i] = neg(triangleNormals[i])
         # calcul la normal des points
         for j in range(3) :
             vertexNormals[t[i][j]] = plus(vertexNormals[t[i][j]], triangleNormals[i])
@@ -211,33 +426,49 @@ def computePalette(imIn, nbColor) :
     RGB_hull = spat.ConvexHull(data)
     RGB_vertices, RGB_triangles = extractVT(RGB_hull, data)
     #2 calcul de la palette
-    RGB_vertices, RGB_triangles = reducHull(RGB_vertices, RGB_triangles, nbColor)
-    RGB_normals = computeNormal(RGB_vertices, RGB_triangles)
-    palette = projectHull(RGB_vertices, RGB_normals)
+    RGB_vertices, RGB_triangles = reducHull2(RGB_vertices, RGB_triangles, nbColor)
+    #RGB_normals = computeNormal(RGB_vertices, RGB_triangles)
+    palette = RGB_vertices #projectHull(RGB_vertices, RGB_normals)
     return palette
 
 def computeW(imIn, palette) :
     #3 calcul de l'enveloppe convexe RGBXY
     XYdata = loadXYData(imIn)
     XY_hull = spat.ConvexHull(XYdata)
-    XY_vertices = XYdata[XY_hull.vertices]
+    XY_vertices_hull = XYdata[XY_hull.vertices]
     #4 calcul des coordonnées barycentrique RGB et RGBXY
-    W_XY = Delaunay_coordinates(XY_vertices, XYdata)
-    W_RGB = Star_coordinates(np.array(palette), XY_vertices[:,:3])
+    W_XY = Delaunay_coordinates(XY_vertices_hull, XYdata)
+    W_RGB = Star_coordinates(np.array(palette), XY_vertices_hull[:,:3])
     #5 multiplication des matrices de coordonnées pour avoir la proportion de chaque couleur de la palette
     W = W_XY.dot(W_RGB)
     return W
 
+def projectPalette(palette) :
+    newPalette = []
+    for vertex in palette :
+        v = []
+        for c in vertex :
+            if (c>maxRGB) :
+                v.append(maxRGB)
+            elif (c<0) :
+                v.append(0)
+            else :
+                v.append(c)
+        newPalette.append(v)
+    return newPalette
+
 def harmonization(imIn, nbColor) :
-    palette = computePalette(imIn, nbColor)
+    hull_vertex = computePalette(imIn, nbColor)
+    palette = projectPalette(hull_vertex)
+    paletteSize = len(palette)
     print(palette)
-    for i in range(nbColor) :
+    for i in range(paletteSize) :
         couleur = [(palette[i][0]/maxRGB, palette[i][1]/maxRGB, palette[i][2]/maxRGB)]
         plt.scatter(i, 0, c = couleur, s=200)
     plt.show()
-    W = computeW(imIn, palette)
-    newPalette = [[0, 0, 0] for i in range(nbColor)]
-    for i in range(nbColor) :
+    W = computeW(imIn, hull_vertex)
+    newPalette = [[0, 0, 0] for i in range(paletteSize)]
+    for i in range(paletteSize) :
         r = float(input("new color R"))
         g = float(input("new color G"))
         b = float(input("new color B"))
@@ -255,16 +486,16 @@ def harmonization(imIn, nbColor) :
         for j in range(nby) :
             w = W[i*nby+j]
             couleur = [0, 0, 0]
-            for p in range(nbColor) :
+            for p in range(paletteSize) :
                 couleur = plus(couleur, s(w[p], newPalette[p]))
                 r, g, b = couleur
             dataOut[i, j] = (int(r), int(g), int(b))
             #print(w)
     return imOut
 
-nameImIn = "images\colorful.ppm"
+nameImIn = "images\peacock.jpg"
 imIn = Image.open(nameImIn)
-imOut = harmonization(imIn, 4)
+imOut = harmonization(imIn, 8)
 imIn.close()
-imOut.save("images\TanTest.ppm")
+imOut.save("images\TestPeacock.jpg")
 imOut.close()
