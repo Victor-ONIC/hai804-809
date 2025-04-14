@@ -2,6 +2,7 @@ import math
 from PIL import Image
 import numpy as np
 import scipy.spatial as spat #import ConvexHull Delaunay
+from scipy.spatial import KDTree
 import scipy.sparse as spar # coo_matrix
 
 import matplotlib.pyplot as plt
@@ -212,7 +213,7 @@ def reducHull2(vertices0, triangles0, targetNbr) :
                             temp = dot(v1, v2)
                             cos2 = temp*temp/normSquare(v2)/normSquare(v1)
                             sin2 = 1-cos2
-                            if (sin2 < minInter[p]) :
+                            if (sin2 < minInter[p] and sin2 > 0) :
                                 minInter[p] = sin2
                                 minVertex[p] = vertex
                 nearPoint = []
@@ -421,6 +422,7 @@ def Star_coordinates(vertices, data) :
         mask = (b>=0).all(axis=1)
         barycoords[mask] = 0.
         barycoords[np.ix_(mask,s)] = b[mask]
+                    
     return barycoords
 
 def computePalette(imIn, nbColor) :
@@ -445,6 +447,12 @@ def computePalette(imIn, nbColor) :
     palette = RGB_vertices #projectHull(RGB_vertices, RGB_normals)
     return palette
 
+#basically basically just sends them to the closest thing we got
+def project_onto_hull(hull_vertices, points):
+    tree = KDTree(hull_vertices) #convert our valuses to a tree we can traverse
+    _, indices = tree.query(points) #basically find the points in that tree
+    return hull_vertices[indices] #return that
+
 def computeW(imIn, palette) :
     #3 calcul de l'enveloppe convexe RGBXY
     XYdata = loadXYData(imIn)
@@ -453,7 +461,12 @@ def computeW(imIn, palette) :
     #4 calcul des coordonnées barycentrique RGB et RGBXY
     W_XY = Delaunay_coordinates(XY_vertices_hull, XYdata)
     print("xy \n", W_XY, "\nyo")
-    W_RGB = Star_coordinates(np.array(palette), XY_vertices_hull[:,:3])
+
+    #project the dawgs
+    rgb_components = XY_vertices_hull[:,:3]
+    projected_rgb = project_onto_hull(np.array(palette), rgb_components)
+
+    W_RGB = Star_coordinates(np.array(palette), projected_rgb)
     print("rgb \n", W_RGB)
     #5 multiplication des matrices de coordonnées pour avoir la proportion de chaque couleur de la palette
     W = W_XY.dot(W_RGB)
@@ -486,10 +499,11 @@ def harmonization(imIn, nbColor) :
     print(W)
     newPalette = [[0, 0, 0] for i in range(paletteSize)]
     for i in range(paletteSize) :
-        r = float(input("new color R"))
-        g = float(input("new color G"))
-        b = float(input("new color B"))
-        newPalette[i] = [r, g, b]
+        # r = float(input("new color R"))
+        # g = float(input("new color G"))
+        # b = float(input("new color B"))
+        # newPalette[i] = [r, g, b]
+        newPalette[i] = palette[i]
         couleur = [(newPalette[i][0]/maxRGB, newPalette[i][1]/maxRGB, newPalette[i][2]/maxRGB)]
         plt.scatter(i, 0, c = couleur, s=200)
     plt.show()
@@ -510,9 +524,9 @@ def harmonization(imIn, nbColor) :
             #print(w)
     return imOut
 
-nameImIn = "images\peacock.jpg"
+nameImIn = "./src/images/peacock.jpg"
 imIn = Image.open(nameImIn)
 imOut = harmonization(imIn, 8)
 imIn.close()
-imOut.save("images\TestPeacock.jpg")
+imOut.save("./src/images/TestPeacock.jpg")
 imOut.close()
